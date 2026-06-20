@@ -138,9 +138,17 @@ const adminKeys = new Set();
 /* Persist admin keys to face service disk — survives all restarts AND redeploys */
 const FACE_URL = () => process.env.FACE_SERVICE_URL || "http://localhost:8000";
 
+/* Shared secret injected only by this server proxy so the face service can
+   reject direct/external callers. */
+function faceHeaders(extra = {}) {
+  const headers = { ...extra };
+  if (process.env.FACE_INTERNAL_TOKEN) headers["X-Internal-Token"] = process.env.FACE_INTERNAL_TOKEN;
+  return headers;
+}
+
 async function loadKeysFromFaceService() {
   try {
-    const r = await fetch(`${FACE_URL()}/admin-keys`);
+    const r = await fetch(`${FACE_URL()}/admin-keys`, { headers: faceHeaders() });
     if (!r.ok) return;
     const { keys } = await r.json();
     keys.forEach(k => adminKeys.add(k));
@@ -154,7 +162,7 @@ async function syncKeyToFaceService(key) {
   try {
     await fetch(`${FACE_URL()}/admin-keys`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: faceHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({ key }),
     });
   } catch (e) {
@@ -195,7 +203,7 @@ async function validateKey(code) {
   const faceUrl = FACE_URL();
   console.log(`validateKey: "${code}" not in memory (${adminKeys.size} keys loaded), fetching from ${faceUrl}/admin-keys`);
   try {
-    const r = await fetch(`${faceUrl}/admin-keys`);
+    const r = await fetch(`${faceUrl}/admin-keys`, { headers: faceHeaders() });
     if (r.ok) {
       const { keys } = await r.json();
       keys.forEach(k => adminKeys.add(k));

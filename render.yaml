@@ -24,6 +24,8 @@ services:
         sync: false       # comma-separated list of permanent portal keys (survive redeploys)
       - key: FACE_SERVICE_URL
         sync: false       # set to the face service URL after it deploys
+      - key: FACE_INTERNAL_TOKEN
+        generateValue: true   # shared secret injected on all face-service calls
       - key: TURN_URL_UDP
         sync: false
       - key: TURN_URL_TCP
@@ -49,3 +51,10 @@ services:
     envVars:
       - key: FACE_DATA_FILE
         value: /data/encodings.json
+      - key: FACE_INTERNAL_TOKEN
+        fromService:
+          type: web
+          name: portal
+          envVarKey: FACE_INTERNAL_TOKEN
+      - key: FACE_ALLOWED_ORIGINS
+        sync: false       # optional: comma-separated browser origins (face service is server-to-server only)

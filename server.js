@@ -30,12 +30,21 @@ if (process.env.PORTAL_KEYS_ENABLED === "true") {
 /* ---------- FACE SERVICE PROXY ---------- */
 
 const FACE_SERVICE_URL = process.env.FACE_SERVICE_URL || "http://localhost:8000";
+const FACE_INTERNAL_TOKEN = process.env.FACE_INTERNAL_TOKEN || "";
+
+/* Headers for server-to-server calls to the face service. The shared secret is
+   injected only here so the face service can reject direct/external callers. */
+function faceHeaders(extra = {}) {
+  const headers = { ...extra };
+  if (FACE_INTERNAL_TOKEN) headers["X-Internal-Token"] = FACE_INTERNAL_TOKEN;
+  return headers;
+}
 
 async function faceProxy(path, body, res) {
   try {
     const r = await fetch(`${FACE_SERVICE_URL}${path}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: faceHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify(body),
     });
     const ct = r.headers.get("content-type") || "";
@@ -76,7 +85,7 @@ app.post("/face/identify",      (req, res) => faceProxy("/identify",      req.bo
 app.post("/face/enroll-guest",  (req, res) => faceProxy("/enroll-guest",  req.body, res));
 app.get("/face/health", async (req, res) => {
   try {
-    const r = await fetch(`${FACE_SERVICE_URL}/health`);
+    const r = await fetch(`${FACE_SERVICE_URL}/health`, { headers: faceHeaders() });
     const data = await r.json();
     res.status(r.status).json(data);
   } catch (e) {
@@ -98,6 +107,7 @@ app.delete("/admin/enrollments/:key", async (req, res) => {
   try {
     const r = await fetch(`${FACE_SERVICE_URL}/enrolled/${encodeURIComponent(key)}`, {
       method: "DELETE",
+      headers: faceHeaders(),
     });
     const data = await r.json();
     if (!r.ok) return res.status(r.status).json(data);
@@ -114,7 +124,7 @@ app.get("/admin/enrollments", async (req, res) => {
     return res.status(401).json({ error: "unauthorized" });
   }
   try {
-    const r = await fetch(`${FACE_SERVICE_URL}/enrolled`);
+    const r = await fetch(`${FACE_SERVICE_URL}/enrolled`, { headers: faceHeaders() });
     if (!r.ok) return res.status(502).json({ error: "face service error" });
     const { count, keys } = await r.json();
 

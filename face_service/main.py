@@ -6,23 +6,46 @@ Stack: YuNet DNN detector + MobileFaceNet ONNX embeddings
 import os
 import io
 import json
+import hmac
 import base64
 import numpy as np
 import cv2
 import onnxruntime as ort
 from PIL import Image
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Header, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 app = FastAPI(title="Portal Face Service")
 
+# CORS is restricted to known portal origin(s). The face service is only meant
+# to be called server-to-server by the Node proxy, so by default no browser
+# origin is allowed. Set FACE_ALLOWED_ORIGINS (comma-separated) to permit any.
+_allowed_origins = [
+    o.strip() for o in os.environ.get("FACE_ALLOWED_ORIGINS", "").split(",") if o.strip()
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_allowed_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Shared secret injected by the Node proxy as the X-Internal-Token header.
+# All sensitive endpoints require it, compared with a constant-time equality
+# check so the service rejects direct/external calls. When the token is not
+# configured the service fails closed (denies every guarded request).
+FACE_INTERNAL_TOKEN = os.environ.get("FACE_INTERNAL_TOKEN", "")
+
+
+def require_internal_token(x_internal_token: str | None = Header(default=None)):
+    if not FACE_INTERNAL_TOKEN:
+        raise HTTPException(
+            status_code=503,
+            detail="Face service not configured: FACE_INTERNAL_TOKEN is required",
+        )
+    if not x_internal_token or not hmac.compare_digest(x_internal_token, FACE_INTERNAL_TOKEN):
+        raise HTTPException(status_code=401, detail="Unauthorized")
 
 DATA_FILE = os.environ.get("FACE_DATA_FILE", "face_data/encodings.json")
 _data_dir = os.path.dirname(DATA_FILE)
@@ -189,7 +212,7 @@ class DetectRequest(BaseModel):
     image_b64: str
 
 
-@app.post("/enroll")
+@app.post("/enroll", dependencies=[Depends(require_internal_token)])
 def enroll(req: EnrollRequest):
     try:
         img = decode_image_bgr(req.image_b64)
@@ -211,7 +234,7 @@ def enroll(req: EnrollRequest):
     return {"status": "enrolled", "portal_key": req.portal_key}
 
 
-@app.post("/verify")
+@app.post("/verify", dependencies=[Depends(require_internal_token)])
 def verify(req: VerifyRequest):
     data = load_encodings()
     key = req.portal_key.strip().upper()
@@ -241,7 +264,7 @@ def verify(req: VerifyRequest):
     }
 
 
-@app.post("/identify")
+@app.post("/identify", dependencies=[Depends(require_internal_token)])
 def identify(req: DetectRequest):
     """Detect all faces and match each against enrolled keys."""
     if not req.image_b64:
@@ -274,7 +297,7 @@ def identify(req: DetectRequest):
     return {"faces": results}
 
 
-@app.post("/detect")
+@app.post("/detect", dependencies=[Depends(require_internal_token)])
 def detect(req: DetectRequest):
     if not req.image_b64:
         return {"faces": []}
@@ -289,7 +312,7 @@ def detect(req: DetectRequest):
                       for x, y, fw, fh in faces]}
 
 
-@app.delete("/enrolled/{portal_key}")
+@app.delete("/enrolled/{portal_key}", dependencies=[Depends(require_internal_token)])
 def delete_enrolled(portal_key: str):
     data = load_encodings()
     key = portal_key.strip().upper()
@@ -300,7 +323,7 @@ def delete_enrolled(portal_key: str):
     return {"status": "deleted", "portal_key": key}
 
 
-@app.post("/enroll-guest")
+@app.post("/enroll-guest", dependencies=[Depends(require_internal_token)])
 def enroll_guest(req: EnrollRequest):
     """Enroll a guest face under the keyholder's portal key (KEY:g1, KEY:g2, …)."""
     try:
@@ -324,7 +347,7 @@ def enroll_guest(req: EnrollRequest):
     return {"status": "enrolled", "portal_key": req.portal_key, "guest_slot": slot}
 
 
-@app.get("/enrolled")
+@app.get("/enrolled", dependencies=[Depends(require_internal_token)])
 def enrolled():
     data = load_encodings()
     return {"count": len(data), "keys": list(data.keys())}
@@ -334,12 +357,12 @@ class AdminKeyRequest(BaseModel):
     key: str
 
 
-@app.get("/admin-keys")
+@app.get("/admin-keys", dependencies=[Depends(require_internal_token)])
 def get_admin_keys():
     return {"keys": load_admin_keys()}
 
 
-@app.post("/admin-keys")
+@app.post("/admin-keys", dependencies=[Depends(require_internal_token)])
 def add_admin_key(req: AdminKeyRequest):
     keys = load_admin_keys()
     k = req.key.strip().upper()
@@ -349,7 +372,7 @@ def add_admin_key(req: AdminKeyRequest):
     return {"keys": keys}
 
 
-@app.delete("/admin-keys/{key}")
+@app.delete("/admin-keys/{key}", dependencies=[Depends(require_internal_token)])
 def remove_admin_key(key: str):
     keys = load_admin_keys()
     keys = [k for k in keys if k != key.strip().upper()]
