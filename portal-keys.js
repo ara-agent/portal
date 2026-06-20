@@ -188,6 +188,12 @@ function generateAdminKey() {
 /* ------------------------------------------------------------------ */
 
 async function validateKey(code) {
+  /* Portal keys use an uppercase-only charset, so normalize the entered
+     code the same way isAdminKey / the face service / the ADMIN_KEYS loader
+     do. Without this, a valid key typed with any lowercase letter (mobile
+     autocapitalization, copy-paste) is wrongly rejected as invalid. */
+  code = code.trim().toUpperCase();
+
   /* Check admin keys first — instant, no RPC call */
   if (adminKeys.has(code)) return true;
 
