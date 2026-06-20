@@ -24,6 +24,8 @@ services:
         sync: false       # comma-separated list of permanent portal keys (survive redeploys)
       - key: FACE_SERVICE_URL
         sync: false       # set to the face service URL after it deploys
+      - key: FACE_INTERNAL_TOKEN
+        sync: false       # MUST match portal-face FACE_INTERNAL_TOKEN (shared secret for proxy → face service)
       - key: TURN_URL_UDP
         sync: false
       - key: TURN_URL_TCP
@@ -49,3 +51,7 @@ services:
     envVars:
       - key: FACE_DATA_FILE
         value: /data/encodings.json
+      - key: FACE_INTERNAL_TOKEN
+        sync: false       # MUST match the portal service FACE_INTERNAL_TOKEN (shared secret)
+      - key: ALLOWED_ORIGINS
+        sync: false       # comma-separated portal origin(s) allowed for browser CORS, e.g. https://portal.onrender.com

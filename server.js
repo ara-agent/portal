@@ -30,12 +30,21 @@ if (process.env.PORTAL_KEYS_ENABLED === "true") {
 /* ---------- FACE SERVICE PROXY ---------- */
 
 const FACE_SERVICE_URL = process.env.FACE_SERVICE_URL || "http://localhost:8000";
+const FACE_INTERNAL_TOKEN = process.env.FACE_INTERNAL_TOKEN || "";
+
+// Headers injected on every call to the face service so it can distinguish
+// trusted proxy traffic from direct external callers.
+function faceHeaders(extra = {}) {
+  const h = { ...extra };
+  if (FACE_INTERNAL_TOKEN) h["X-Internal-Token"] = FACE_INTERNAL_TOKEN;
+  return h;
+}
 
 async function faceProxy(path, body, res) {
   try {
     const r = await fetch(`${FACE_SERVICE_URL}${path}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: faceHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify(body),
     });
     const ct = r.headers.get("content-type") || "";
@@ -98,6 +107,7 @@ app.delete("/admin/enrollments/:key", async (req, res) => {
   try {
     const r = await fetch(`${FACE_SERVICE_URL}/enrolled/${encodeURIComponent(key)}`, {
       method: "DELETE",
+      headers: faceHeaders(),
     });
     const data = await r.json();
     if (!r.ok) return res.status(r.status).json(data);
@@ -114,7 +124,7 @@ app.get("/admin/enrollments", async (req, res) => {
     return res.status(401).json({ error: "unauthorized" });
   }
   try {
-    const r = await fetch(`${FACE_SERVICE_URL}/enrolled`);
+    const r = await fetch(`${FACE_SERVICE_URL}/enrolled`, { headers: faceHeaders() });
     if (!r.ok) return res.status(502).json({ error: "face service error" });
     const { count, keys } = await r.json();
 
