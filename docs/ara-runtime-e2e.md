@@ -13,3 +13,11 @@ the repository, made a minimal change, committed it on a branch, and opened a pu
 
 Ara continued work on the same pull request branch, updating this note in place
 rather than opening a new pull request.
+
+## Strict native SDK follow-up
+
+- Date: 2026-06-21
+- Runtime path: strict native Claude Agent SDK mode
+
+Strict native Claude Agent SDK mode executed this follow-up after the root-safe
+permission fix, committing the change on the existing pull request branch.
