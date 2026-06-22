@@ -654,18 +654,19 @@ async function detectLocalFace() {
       const face = data.faces[0];
       sendDataMsg({ type: "face_box", box: face });
       const matchedKey = face.key || null;
-      myMatchedKey = matchedKey || myMatchedKey; /* keep last known on no-match frames */
+      const prevMatchedKey = myMatchedKey;
+      if (matchedKey) myMatchedKey = matchedKey; /* keep last known; don't clear on no-match */
       labelLocal.innerText = `${roleLabel(myUserNumber)}${matchedKey ? "\n✓" : ""}`;
 
-      /* any matched key = enrolled keyholder; green regardless of which key it is */
+      /* any matched key = enrolled keyholder; update display whenever key or state changes */
       if (matchedKey) {
-        if (socket._faceResult !== "verified") {
+        if (socket._faceResult !== "verified" || prevMatchedKey !== myMatchedKey) {
           socket._faceResult = "verified";
           setConnectionStatus("verified");
           socket.emit("face_verified", currentCode);
         }
       } else if (socket._faceResult === "verified") {
-        /* previously verified, now face detected but no match — flag mismatch */
+        /* previously verified, face now detected but not matched — flag mismatch */
         socket._faceResult = "mismatch";
         setConnectionStatus("mismatch");
         socket.emit("face_warning", currentCode);
@@ -743,8 +744,17 @@ function startAnalysis() {
     await runAnalysis();
     _analysisRunning = false;
   }
-  setTimeout(runAnalysis, 1500);
-  analysisInterval = setInterval(analysisLoop, 1800);
+  /* wait for data channel to open before first run so face_box isn't dropped */
+  function kickAnalysis() {
+    const ch = dataChannel || receiveChannel;
+    if (ch && ch.readyState === "open") {
+      runAnalysis();
+      analysisInterval = setInterval(analysisLoop, 1800);
+    } else {
+      setTimeout(kickAnalysis, 300);
+    }
+  }
+  setTimeout(kickAnalysis, 500);
 }
 
 window.addEventListener("resize", updateLabels);
