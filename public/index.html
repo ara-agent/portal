@@ -492,7 +492,12 @@ let mySocketId   = null;
 socket.on("connect", () => { mySocketId = socket.id; });
 socket.on("assigned", ({ userNumber }) => { myUserNumber = userNumber; });
 
-function roleLabel(num) { const k = currentCode || "—"; return num === 1 ? `#${k}` : `#${k}-G`; }
+function roleLabel(num) {
+  const key = (num === myUserNumber) ? myMatchedKey : peerMatchedKey;
+  if (key) return `#${key}`;
+  const k = currentCode || "—";
+  return num === 1 ? `#${k}` : `#${k}-G`;
+}
 
 /* ---- elements ---- */
 const remoteVideo  = document.getElementById("remote");
@@ -512,7 +517,9 @@ const labelRemote  = document.getElementById("labelRemote");
 
 let myUserNumber = null;
 let localInfo    = null;
-let peerFaceBox  = null;   /* latest bbox received from peer via data channel */
+let peerFaceBox    = null;   /* latest bbox received from peer via data channel */
+let myMatchedKey   = null;   /* portal key the face service matched to local face */
+let peerMatchedKey = null;   /* portal key the face service matched to peer face */
 
 const faceCanvas = document.getElementById("faceCanvas");
 const faceCtx    = faceCanvas.getContext("2d");
@@ -647,7 +654,8 @@ async function detectLocalFace() {
       const face = data.faces[0];
       sendDataMsg({ type: "face_box", box: face });
       const matchedKey = face.key || null;
-      labelLocal.innerText = `${roleLabel(myUserNumber)}${matchedKey ? "\n✓ " + matchedKey : ""}`;
+      myMatchedKey = matchedKey || myMatchedKey; /* keep last known on no-match frames */
+      labelLocal.innerText = `${roleLabel(myUserNumber)}${matchedKey ? "\n✓" : ""}`;
 
       /* any matched key = enrolled keyholder; green regardless of which key it is */
       if (matchedKey) {
@@ -1010,6 +1018,7 @@ async function rescueIdentity() {
     const data = await res.json();
 
     const matched = data.faces && data.faces.length > 0 && data.faces[0].key;
+    if (matched) myMatchedKey = matched;
     const result = matched ? "verified" : "mismatch";
     socket._faceResult = result;
     socket._faceWarning = result === "mismatch";
@@ -1026,10 +1035,11 @@ async function rescueIdentity() {
 function setConnectionStatus(result) {
   const el = document.getElementById("status");
   el.style.color = "";
+  const displayKey = myMatchedKey || currentCode || "";
   if (result === "verified") {
-    el.innerHTML = "connected<br><span style='color:#00ff88;font-size:10px;letter-spacing:2px'>" + (currentCode || "") + "</span>";
+    el.innerHTML = "connected<br><span style='color:#00ff88;font-size:10px;letter-spacing:2px'>" + displayKey + "</span>";
   } else if (result === "mismatch") {
-    el.innerHTML = "connected<br><span style='color:#ff4444;font-size:10px;letter-spacing:2px'>" + (currentCode || "") + "</span>";
+    el.innerHTML = "connected<br><span style='color:#ff4444;font-size:10px;letter-spacing:2px'>" + displayKey + "</span>";
   } else {
     el.innerText = "connected";
   }
@@ -1038,7 +1048,7 @@ function setConnectionStatus(result) {
 function setPeerStatus(result) {
   const el  = document.getElementById("status");
   const top = el.innerHTML.split("<br>")[0] || "connected";
-  const key = currentCode || "";
+  const key = peerMatchedKey || currentCode || "";
   if (result === "verified") {
     el.innerHTML = top + "<br><span style='color:#00ff88;font-size:10px;letter-spacing:2px'>" + key + "</span>";
   } else if (result === "mismatch") {
@@ -1116,6 +1126,8 @@ function setupDataChannel(channel) {
       /* peer's face bbox from server — draw box and update corner label */
       if (msg.type === "face_box") {
         peerFaceBox = msg.box;
+        if (msg.box && msg.box.key) peerMatchedKey = msg.box.key;
+        else if (!msg.box) peerMatchedKey = null;
         drawPeerFaceBox(peerFaceBox);
         const peerNum = myUserNumber ? (3 - myUserNumber) : 2;
         const rect = remoteVideo.getBoundingClientRect();
@@ -1124,7 +1136,7 @@ function setupDataChannel(channel) {
         labelRemote.style.left   = "auto";
         labelRemote.style.top    = "auto";
         labelRemote.style.textAlign = "right";
-        labelRemote.innerText = `${roleLabel(peerNum)}`;
+        labelRemote.innerText = `${roleLabel(peerNum)}${peerMatchedKey ? "\n✓" : ""}`;
       }
 
       /* global ui state sync */
