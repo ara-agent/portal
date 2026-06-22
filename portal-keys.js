@@ -45,16 +45,19 @@ if (!PROGRAM_ID || !TREASURY) {
 
 const connection = new Connection(RPC_URL, "confirmed");
 
-/* Load server keypair (used only for mark_used instruction) */
-function loadServerKeypair() {
+/* Load server keypair once at startup (used only for mark_used instruction) */
+const _serverKeypair = (() => {
   try {
-    const raw = JSON.parse(fs.readFileSync(process.env.SERVER_KEYPAIR || "~/.config/solana/id.json"));
+    const kpPath = process.env.SERVER_KEYPAIR;
+    if (!kpPath) { console.warn("SERVER_KEYPAIR not set — mark_used will be unavailable"); return null; }
+    const raw = JSON.parse(fs.readFileSync(kpPath));
     return Keypair.fromSecretKey(Uint8Array.from(raw));
   } catch {
     console.warn("SERVER_KEYPAIR not found — mark_used will be unavailable");
     return null;
   }
-}
+})();
+function loadServerKeypair() { return _serverKeypair; }
 
 /* ------------------------------------------------------------------ */
 /*  IDL (minimal — only what the server needs)                         */
@@ -339,6 +342,7 @@ function init(app) {
     const session = pendingSessions.get(req.params.sessionId);
     if (!session) return res.status(404).send("session not found");
     if (!session.portalKey) return res.status(202).send("pending");
+    pendingSessions.delete(req.params.sessionId); /* prevent unbounded growth */
     res.json({ portalKey: session.portalKey });
   });
 

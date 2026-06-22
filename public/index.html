@@ -964,18 +964,17 @@ socket.on("face_warning",  () => { setPeerStatus("mismatch"); });
 socket.on("face_verified", () => { setPeerStatus("verified"); });
 
 async function enrollGuest() {
-  if (!remoteVideo || remoteVideo.readyState < 2 || !currentCode) {
-    document.getElementById("status").innerText = "no peer video to enroll from";
+  const localVideo = document.getElementById("local");
+  if (!localVideo || !localVideo.videoWidth || !currentCode) {
+    document.getElementById("status").innerText = "camera not ready";
     return;
   }
   const statusEl = document.getElementById("status");
   statusEl.innerText = "enrolling guest...";
   try {
-    const canvas = document.createElement("canvas");
-    canvas.width  = remoteVideo.videoWidth  || 640;
-    canvas.height = remoteVideo.videoHeight || 480;
-    canvas.getContext("2d").drawImage(remoteVideo, 0, 0);
-    const image_b64 = canvas.toDataURL("image/jpeg", 0.9);
+    /* capture the guest's OWN camera, not the remote video */
+    _faceCapCtx.drawImage(localVideo, 0, 0, DETECT_W, DETECT_H);
+    const image_b64 = _faceCapCanvas.toDataURL("image/jpeg", 0.9);
     const res = await fetch("/face/enroll-guest", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -984,21 +983,14 @@ async function enrollGuest() {
     const data = await res.json();
     if (res.ok) {
       socket._faceResult = "verified";
-      statusEl.innerText = `guest enrolled (${data.guest_slot})`;
-      statusEl.style.color = "#00ff88";
-      setTimeout(() => {
-        statusEl.style.color = "";
-        setConnectionStatus("verified");
-      }, 3000);
+      myMatchedKey = myMatchedKey || currentCode;
+      setConnectionStatus("verified");
+      flash(`GUEST ENROLLED · ${data.guest_slot}`);
     } else {
-      statusEl.innerText = data.detail || data.error || "guest enrollment failed";
-      statusEl.style.color = "#ff4444";
-      setTimeout(() => { statusEl.style.color = ""; setConnectionStatus(socket._faceResult); }, 3000);
+      flash(data.detail || data.error || "ENROLLMENT FAILED");
     }
   } catch (e) {
-    statusEl.innerText = "guest enrollment error";
-    statusEl.style.color = "#ff4444";
-    setTimeout(() => { statusEl.style.color = ""; setConnectionStatus(socket._faceResult); }, 3000);
+    flash("ENROLLMENT ERROR");
   }
 }
 
@@ -1042,28 +1034,31 @@ async function rescueIdentity() {
   }
 }
 
-function setConnectionStatus(result) {
+/* track local and peer status independently so neither overwrites the other */
+let _localStatus = null;
+let _peerStatus  = null;
+
+function _renderStatus() {
   const el = document.getElementById("status");
   el.style.color = "";
-  const displayKey = myMatchedKey || currentCode || "";
-  if (result === "verified") {
-    el.innerHTML = "connected<br><span style='color:#00ff88;font-size:10px;letter-spacing:2px'>" + displayKey + "</span>";
-  } else if (result === "mismatch") {
-    el.innerHTML = "connected<br><span style='color:#ff4444;font-size:10px;letter-spacing:2px'>" + displayKey + "</span>";
-  } else {
-    el.innerText = "connected";
-  }
+  const lKey = myMatchedKey  || currentCode || "";
+  const pKey = peerMatchedKey || currentCode || "";
+  const lColor = _localStatus === "verified" ? "#00ff88" : _localStatus === "mismatch" ? "#ff4444" : null;
+  const pColor = _peerStatus  === "verified" ? "#00ff88" : _peerStatus  === "mismatch" ? "#ff4444" : null;
+  let html = "connected";
+  if (lColor) html += `<br><span style='color:${lColor};font-size:10px;letter-spacing:2px'>${lKey}</span>`;
+  if (pColor) html += `<br><span style='color:${pColor};font-size:10px;letter-spacing:2px;opacity:0.6'>${pKey} ·</span>`;
+  el.innerHTML = html;
+}
+
+function setConnectionStatus(result) {
+  _localStatus = result || null;
+  _renderStatus();
 }
 
 function setPeerStatus(result) {
-  const el  = document.getElementById("status");
-  const top = el.innerHTML.split("<br>")[0] || "connected";
-  const key = peerMatchedKey || currentCode || "";
-  if (result === "verified") {
-    el.innerHTML = top + "<br><span style='color:#00ff88;font-size:10px;letter-spacing:2px'>" + key + "</span>";
-  } else if (result === "mismatch") {
-    el.innerHTML = top + "<br><span style='color:#ff4444;font-size:10px;letter-spacing:2px'>" + key + "</span>";
-  }
+  _peerStatus = result || null;
+  _renderStatus();
 }
 
 /* =====================================================================
