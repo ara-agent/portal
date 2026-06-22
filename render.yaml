@@ -3,7 +3,7 @@ services:
   - type: web
     name: portal
     runtime: node
-    plan: free
+    plan: starter           # upgraded from free — eliminates cold-start sleep, provides uptime SLA
     buildCommand: npm install
     startCommand: node server.js
     healthCheckPath: /ice-config
@@ -11,23 +11,27 @@ services:
       - key: PORTAL_KEYS_ENABLED
         value: "true"
       - key: SOLANA_RPC_URL
-        sync: false       # fill in Render dashboard
+        sync: false           # REQUIRED: set to Helius RPC URL in Render dashboard
       - key: PROGRAM_ID
-        sync: false
+        sync: false           # REQUIRED: set after Solana program is deployed
       - key: TREASURY_PUBKEY
-        sync: false
+        sync: false           # REQUIRED: set after Solana program is deployed
+      - key: SERVER_KEYPAIR
+        sync: false           # REQUIRED: path to server keypair JSON for mark_used instruction
       - key: ADMIN_KEY
-        generateValue: true
+        generateValue: true   # auto-generated — copy from dashboard to use admin panel
       - key: ADMIN_SECRET
         generateValue: true
       - key: ADMIN_KEYS
-        sync: false       # comma-separated list of permanent portal keys (survive redeploys)
+        sync: false           # OPTIONAL: comma-separated permanent portal keys (survive redeploys)
       - key: FACE_SERVICE_URL
-        sync: false       # set to the face service URL after it deploys
+        sync: false           # REQUIRED: set to portal-face service URL after it deploys
+      - key: FACE_SERVICE_SECRET
+        sync: false           # REQUIRED: must match portal-face FACE_SERVICE_SECRET exactly
       - key: TURN_URL_UDP
-        sync: false
+        sync: false           # OPTIONAL: TURN server UDP URL (relay for restrictive networks)
       - key: TURN_URL_TCP
-        sync: false
+        sync: false           # OPTIONAL: TURN server TCP URL
       - key: TURN_USERNAME
         sync: false
       - key: TURN_CREDENTIAL
@@ -49,3 +53,5 @@ services:
     envVars:
       - key: FACE_DATA_FILE
         value: /data/encodings.json
+      - key: FACE_SERVICE_SECRET
+        sync: false           # REQUIRED: set a strong random secret; must match portal service value

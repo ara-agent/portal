@@ -464,6 +464,49 @@ button {
 
 <div id="overlay" class="overlay"></div>
 
+<!-- ── Biometric Consent Modal ───────────────────────────────────────────── -->
+<div id="consentModal" style="
+  display:none;position:fixed;inset:0;z-index:20000;
+  background:rgba(0,0,0,0.88);
+  display:none;justify-content:center;align-items:center;">
+  <div style="
+    background:#0a0a0a;border:1px solid rgba(255,255,255,0.15);
+    max-width:420px;width:90%;padding:28px 24px;font-size:11px;line-height:1.7;
+    letter-spacing:1px;">
+    <div style="font-size:13px;letter-spacing:3px;margin-bottom:16px">BIOMETRIC CONSENT</div>
+    <p style="margin-bottom:12px;opacity:0.85">
+      Portal is about to capture a mathematical representation of your face
+      (a <em>face embedding</em>) and store it alongside your portal key.
+    </p>
+    <p style="margin-bottom:4px;opacity:0.6">What is collected:</p>
+    <p style="margin-bottom:12px;opacity:0.85">
+      A numeric vector derived from your facial geometry. No photograph is retained.
+    </p>
+    <p style="margin-bottom:4px;opacity:0.6">How it is used:</p>
+    <p style="margin-bottom:12px;opacity:0.85">
+      To verify your identity automatically during future portal sessions.
+      Your embedding is stored securely and is never shared with other users.
+    </p>
+    <p style="margin-bottom:4px;opacity:0.6">Retention and deletion:</p>
+    <p style="margin-bottom:20px;opacity:0.85">
+      Your biometric data is retained until your portal key is revoked or you request deletion.
+      Contact the portal administrator to delete your data at any time.
+    </p>
+    <div style="display:flex;gap:12px;justify-content:flex-end">
+      <button id="consentDecline"
+        style="background:transparent;color:rgba(255,255,255,0.45);border:1px solid rgba(255,255,255,0.2);
+          font-family:inherit;font-size:10px;letter-spacing:2px;padding:8px 16px;cursor:crosshair">
+        DECLINE
+      </button>
+      <button id="consentAccept"
+        style="background:white;color:black;border:none;
+          font-family:inherit;font-size:10px;letter-spacing:2px;padding:8px 16px;cursor:crosshair">
+        I CONSENT — ENROLL
+      </button>
+    </div>
+  </div>
+</div>
+
 <script src="/socket.io/socket.io.js"></script>
 
 <script>
@@ -963,12 +1006,35 @@ socket.on("peer_left", () => { location.reload(); });
 socket.on("face_warning",  () => { setPeerStatus("mismatch"); });
 socket.on("face_verified", () => { setPeerStatus("verified"); });
 
+/* ── Consent modal helpers ───────────────────────────────────────────────── */
+
+function showConsentModal() {
+  return new Promise((resolve) => {
+    const modal = document.getElementById("consentModal");
+    modal.style.display = "flex";
+    function onAccept() { cleanup(); resolve(true);  }
+    function onDecline(){ cleanup(); resolve(false); }
+    function cleanup() {
+      modal.style.display = "none";
+      document.getElementById("consentAccept").removeEventListener("click", onAccept);
+      document.getElementById("consentDecline").removeEventListener("click", onDecline);
+    }
+    document.getElementById("consentAccept").addEventListener("click", onAccept);
+    document.getElementById("consentDecline").addEventListener("click", onDecline);
+  });
+}
+
 async function enrollGuest() {
   const localVideo = document.getElementById("local");
   if (!localVideo || !localVideo.videoWidth || !currentCode) {
     document.getElementById("status").innerText = "camera not ready";
     return;
   }
+
+  /* Biometric consent required before any capture */
+  const consented = await showConsentModal();
+  if (!consented) { flash("ENROLLMENT CANCELLED"); return; }
+
   const statusEl = document.getElementById("status");
   statusEl.innerText = "enrolling guest...";
   try {

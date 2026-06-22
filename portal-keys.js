@@ -139,11 +139,22 @@ const pendingSessions = new Map();
 const adminKeys = new Set();
 
 /* Persist admin keys to face service disk — survives all restarts AND redeploys */
-const FACE_URL = () => process.env.FACE_SERVICE_URL || "http://localhost:8000";
+const FACE_URL    = () => process.env.FACE_SERVICE_URL    || "http://localhost:8000";
+const FACE_SECRET = () => process.env.FACE_SERVICE_SECRET || "";
+
+/** Auth headers for portal-keys → face-service calls */
+function faceAuthHeaders(extra = {}) {
+  const secret = FACE_SECRET();
+  return {
+    "Content-Type": "application/json",
+    ...(secret ? { "x-service-secret": secret } : {}),
+    ...extra,
+  };
+}
 
 async function loadKeysFromFaceService() {
   try {
-    const r = await fetch(`${FACE_URL()}/admin-keys`);
+    const r = await fetch(`${FACE_URL()}/admin-keys`, { headers: faceAuthHeaders() });
     if (!r.ok) return;
     const { keys } = await r.json();
     keys.forEach(k => adminKeys.add(k));
@@ -157,7 +168,7 @@ async function syncKeyToFaceService(key) {
   try {
     await fetch(`${FACE_URL()}/admin-keys`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: faceAuthHeaders(),
       body: JSON.stringify({ key }),
     });
   } catch (e) {
@@ -198,7 +209,7 @@ async function validateKey(code) {
   const faceUrl = FACE_URL();
   console.log(`validateKey: "${code}" not in memory (${adminKeys.size} keys loaded), fetching from ${faceUrl}/admin-keys`);
   try {
-    const r = await fetch(`${faceUrl}/admin-keys`);
+    const r = await fetch(`${faceUrl}/admin-keys`, { headers: faceAuthHeaders() });
     if (r.ok) {
       const { keys } = await r.json();
       keys.forEach(k => adminKeys.add(k));
@@ -387,7 +398,10 @@ async function revokeKey(code) {
   const key = code.trim().toUpperCase();
   adminKeys.delete(key);
   try {
-    await fetch(`${FACE_URL()}/admin-keys/${encodeURIComponent(key)}`, { method: "DELETE" });
+    await fetch(`${FACE_URL()}/admin-keys/${encodeURIComponent(key)}`, {
+      method: "DELETE",
+      headers: faceAuthHeaders(),
+    });
   } catch (e) {
     console.warn(`revokeKey: failed to remove ${key} from face service — ${e.message}`);
   }

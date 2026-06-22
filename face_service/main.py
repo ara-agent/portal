@@ -11,11 +11,32 @@ import numpy as np
 import cv2
 import onnxruntime as ort
 from PIL import Image
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 app = FastAPI(title="Portal Face Service")
+
+# ---------------------------------------------------------------------------
+# Service-to-service authentication
+# ---------------------------------------------------------------------------
+
+_SERVICE_SECRET = os.environ.get("FACE_SERVICE_SECRET", "")
+
+
+async def require_auth(request: Request):
+    """
+    All endpoints except /health require x-service-secret header matching
+    the FACE_SERVICE_SECRET environment variable.
+    If FACE_SERVICE_SECRET is not set the service runs in open dev mode
+    and logs a warning on every call.
+    """
+    if not _SERVICE_SECRET:
+        print("WARNING: FACE_SERVICE_SECRET not set — running unauthenticated (dev mode)")
+        return
+    secret = request.headers.get("x-service-secret", "")
+    if secret != _SERVICE_SECRET:
+        raise HTTPException(status_code=401, detail="unauthorized")
 
 app.add_middleware(
     CORSMiddleware,
@@ -189,7 +210,7 @@ class DetectRequest(BaseModel):
     image_b64: str
 
 
-@app.post("/enroll")
+@app.post("/enroll", dependencies=[Depends(require_auth)])
 def enroll(req: EnrollRequest):
     try:
         img = decode_image_bgr(req.image_b64)
@@ -211,7 +232,7 @@ def enroll(req: EnrollRequest):
     return {"status": "enrolled", "portal_key": req.portal_key}
 
 
-@app.post("/verify")
+@app.post("/verify", dependencies=[Depends(require_auth)])
 def verify(req: VerifyRequest):
     data = load_encodings()
     key = req.portal_key.strip().upper()
@@ -241,7 +262,7 @@ def verify(req: VerifyRequest):
     }
 
 
-@app.post("/identify")
+@app.post("/identify", dependencies=[Depends(require_auth)])
 def identify(req: DetectRequest):
     """Detect all faces and match each against enrolled keys."""
     if not req.image_b64:
@@ -274,7 +295,7 @@ def identify(req: DetectRequest):
     return {"faces": results}
 
 
-@app.post("/detect")
+@app.post("/detect", dependencies=[Depends(require_auth)])
 def detect(req: DetectRequest):
     if not req.image_b64:
         return {"faces": []}
@@ -289,7 +310,7 @@ def detect(req: DetectRequest):
                       for x, y, fw, fh in faces]}
 
 
-@app.delete("/enrolled/{portal_key}")
+@app.delete("/enrolled/{portal_key}", dependencies=[Depends(require_auth)])
 def delete_enrolled(portal_key: str):
     data = load_encodings()
     key = portal_key.strip().upper()
@@ -300,7 +321,7 @@ def delete_enrolled(portal_key: str):
     return {"status": "deleted", "portal_key": key}
 
 
-@app.post("/enroll-guest")
+@app.post("/enroll-guest", dependencies=[Depends(require_auth)])
 def enroll_guest(req: EnrollRequest):
     """Enroll a guest face under the keyholder's portal key (KEY:g1, KEY:g2, …)."""
     try:
@@ -324,7 +345,7 @@ def enroll_guest(req: EnrollRequest):
     return {"status": "enrolled", "portal_key": req.portal_key, "guest_slot": slot}
 
 
-@app.get("/enrolled")
+@app.get("/enrolled", dependencies=[Depends(require_auth)])
 def enrolled():
     data = load_encodings()
     return {"count": len(data), "keys": list(data.keys())}
@@ -334,12 +355,12 @@ class AdminKeyRequest(BaseModel):
     key: str
 
 
-@app.get("/admin-keys")
+@app.get("/admin-keys", dependencies=[Depends(require_auth)])
 def get_admin_keys():
     return {"keys": load_admin_keys()}
 
 
-@app.post("/admin-keys")
+@app.post("/admin-keys", dependencies=[Depends(require_auth)])
 def add_admin_key(req: AdminKeyRequest):
     keys = load_admin_keys()
     k = req.key.strip().upper()
@@ -349,7 +370,7 @@ def add_admin_key(req: AdminKeyRequest):
     return {"keys": keys}
 
 
-@app.delete("/admin-keys/{key}")
+@app.delete("/admin-keys/{key}", dependencies=[Depends(require_auth)])
 def remove_admin_key(key: str):
     keys = load_admin_keys()
     keys = [k for k in keys if k != key.strip().upper()]
