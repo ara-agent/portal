@@ -16,3 +16,10 @@ data/
 
 # Anchor build artifacts
 target/
+
+# Business documents — keep out of version control
+COMMERCIALIZATION_ROADMAP.md
+COMMERCIALIZATION_ROADMAP.pdf
+TopDog_Law_Proposal_Email.md
+TopDog_Law_Proposal_Email.pdf
+portal_technical_paper.docx
