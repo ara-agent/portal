@@ -1,6 +1,7 @@
 const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
+const path = require("path");
 
 const app = express();
 const server = http.createServer(app);
@@ -8,6 +9,10 @@ const io = new Server(server);
 
 app.use(express.json({ limit: "10mb" }));
 app.use(express.static("public"));
+
+/* buy.html lives at the repo root (not under public/), so the documented
+   purchase page would otherwise 404. Serve it explicitly. */
+app.get(["/buy", "/buy.html"], (req, res) => res.sendFile(path.join(__dirname, "buy.html")));
 
 /* ---------- KEY VALIDATION ---------- */
 /*
