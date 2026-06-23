@@ -9,6 +9,10 @@ const io = new Server(server);
 app.use(express.json({ limit: "10mb" }));
 app.use(express.static("public"));
 
+if (!process.env.ADMIN_KEY) {
+  console.warn("WARNING: ADMIN_KEY is not set \u2014 admin routes (/admin/*, /face/enroll) now FAIL CLOSED and reject all requests. Set ADMIN_KEY to enable them.");
+}
+
 /* ---------- KEY VALIDATION ---------- */
 /*
   Set PORTAL_KEYS_ENABLED=true in your .env to enforce key validation.
@@ -71,7 +75,7 @@ async function faceProxy(path, body, res) {
 
 app.post("/admin/auth", (req, res) => {
   const adminKey = process.env.ADMIN_KEY;
-  if (adminKey && req.headers["x-admin-key"] !== adminKey) {
+  if (!adminKey || req.headers["x-admin-key"] !== adminKey) {
     return res.status(401).json({ error: "unauthorized" });
   }
   res.json({ ok: true });
@@ -79,7 +83,7 @@ app.post("/admin/auth", (req, res) => {
 
 app.post("/face/enroll", (req, res) => {
   const adminKey = process.env.ADMIN_KEY;
-  if (adminKey && req.headers["x-admin-key"] !== adminKey) {
+  if (!adminKey || req.headers["x-admin-key"] !== adminKey) {
     return res.status(401).json({ error: "unauthorized" });
   }
   faceProxy("/enroll", req.body, res);
@@ -101,7 +105,7 @@ app.get("/face/health", async (req, res) => {
 /* POST /admin/revoke-key — remove a key from memory + disk without needing its enrollment */
 app.post("/admin/revoke-key", async (req, res) => {
   const adminKey = process.env.ADMIN_KEY;
-  if (adminKey && req.headers["x-admin-key"] !== adminKey) {
+  if (!adminKey || req.headers["x-admin-key"] !== adminKey) {
     return res.status(401).json({ error: "unauthorized" });
   }
   const { key } = req.body;
@@ -113,7 +117,7 @@ app.post("/admin/revoke-key", async (req, res) => {
 /* DELETE /admin/enrollments/:key — remove a private key's face enrollment */
 app.delete("/admin/enrollments/:key", async (req, res) => {
   const adminKey = process.env.ADMIN_KEY;
-  if (adminKey && req.headers["x-admin-key"] !== adminKey) {
+  if (!adminKey || req.headers["x-admin-key"] !== adminKey) {
     return res.status(401).json({ error: "unauthorized" });
   }
   const key = req.params.key.trim().toUpperCase();
@@ -139,7 +143,7 @@ app.delete("/admin/enrollments/:key", async (req, res) => {
 /* GET /admin/enrollments — list enrolled keys with on-chain/private status */
 app.get("/admin/enrollments", async (req, res) => {
   const adminKey = process.env.ADMIN_KEY;
-  if (adminKey && req.headers["x-admin-key"] !== adminKey) {
+  if (!adminKey || req.headers["x-admin-key"] !== adminKey) {
     return res.status(401).json({ error: "unauthorized" });
   }
   try {
