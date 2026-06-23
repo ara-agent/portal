@@ -1169,7 +1169,13 @@ function setupDataChannel(channel) {
 
   channel.onmessage = (event) => {
     if (typeof event.data === "string") {
-      const msg = JSON.parse(event.data);
+      let msg;
+      try {
+        msg = JSON.parse(event.data);
+      } catch (err) {
+        console.warn("Ignoring malformed data-channel message", err);
+        return;
+      }
 
       /* file meta */
       if (msg.type === "meta") {
