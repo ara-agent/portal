@@ -166,13 +166,15 @@ async function loadKeysFromFaceService() {
 
 async function syncKeyToFaceService(key) {
   try {
-    await fetch(`${FACE_URL()}/admin-keys`, {
+    const r = await fetch(`${FACE_URL()}/admin-keys`, {
       method: "POST",
       headers: faceAuthHeaders(),
       body: JSON.stringify({ key }),
     });
+    return r.ok;
   } catch (e) {
     console.warn("Could not sync admin key to face service:", e.message);
+    return false;
   }
 }
 
@@ -265,7 +267,7 @@ function init(app) {
      Returns: { portalKey: "XXXXXXXX" }
      Generates a free key at your discretion, no SOL required.
   */
-  app.post("/admin/generate-key", (req, res) => {
+  app.post("/admin/generate-key", async (req, res) => {
     const validSecret = process.env.ADMIN_SECRET && req.headers["x-admin-secret"] === process.env.ADMIN_SECRET;
     const validKey    = process.env.ADMIN_KEY    && req.headers["x-admin-key"]    === process.env.ADMIN_KEY;
     // If neither env var is configured, allow through (dev mode, consistent with rest of server)
@@ -276,9 +278,15 @@ function init(app) {
 
     const key = generateAdminKey();
     adminKeys.add(key);
-    syncKeyToFaceService(key); // persist to face service disk — survives redeploys
-    console.log(`Admin key generated: ${key} (total admin keys: ${adminKeys.size})`);
-    res.json({ portalKey: key });
+    // Persist to face-service disk BEFORE handing the key out, so a key we
+    // return is one that actually survives a restart/redeploy.
+    const persisted = await syncKeyToFaceService(key);
+    if (!persisted) {
+      console.warn(`Admin key generated but NOT persisted to face service — it will be lost on restart (total admin keys: ${adminKeys.size})`);
+    } else {
+      console.log(`Admin key generated and persisted (total admin keys: ${adminKeys.size})`);
+    }
+    res.json({ portalKey: key, persisted });
   });
 
   /* GET /admin/list-keys
