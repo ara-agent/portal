@@ -31,6 +31,9 @@ if (process.env.PORTAL_KEYS_ENABLED === "true") {
 
 const FACE_SERVICE_URL    = process.env.FACE_SERVICE_URL    || "http://localhost:8000";
 const FACE_SERVICE_SECRET = process.env.FACE_SERVICE_SECRET || "";
+/* Upper bound on any server->face-service request so a stalled/cold face
+   service can't pin a request (and its socket) open forever. */
+const FACE_TIMEOUT_MS = Number(process.env.FACE_TIMEOUT_MS) || 15000;
 
 if (!FACE_SERVICE_SECRET) {
   console.warn("FACE_SERVICE_SECRET not set — face service calls are unauthenticated (dev mode)");
@@ -51,6 +54,7 @@ async function faceProxy(path, body, res) {
       method: "POST",
       headers: faceHeaders(),
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(FACE_TIMEOUT_MS),
     });
     const ct = r.headers.get("content-type") || "";
     if (!ct.includes("application/json")) {
@@ -90,7 +94,7 @@ app.post("/face/identify",      (req, res) => faceProxy("/identify",      req.bo
 app.post("/face/enroll-guest",  (req, res) => faceProxy("/enroll-guest",  req.body, res));
 app.get("/face/health", async (req, res) => {
   try {
-    const r = await fetch(`${FACE_SERVICE_URL}/health`);
+    const r = await fetch(`${FACE_SERVICE_URL}/health`, { signal: AbortSignal.timeout(FACE_TIMEOUT_MS) });
     const data = await r.json();
     res.status(r.status).json(data);
   } catch (e) {
