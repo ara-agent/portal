@@ -189,7 +189,9 @@ const rooms = {};
 io.on("connection", (socket) => {
 
   socket.on("join", async (code) => {
+    if (typeof code !== "string") return;
     code = code.trim();
+    if (!code) return;
 
     if (!rooms[code]) rooms[code] = { users: [] };
     const room = rooms[code];
@@ -225,18 +227,21 @@ io.on("connection", (socket) => {
 
   /* ---------- SIGNAL ---------- */
 
-  socket.on("signal", ({ code, data }) => {
-    socket.to(code).emit("signal", data);
+  socket.on("signal", (payload) => {
+    if (!payload || typeof payload.code !== "string") return;
+    socket.to(payload.code).emit("signal", payload.data);
   });
 
   /* ---------- FACE WARNING ---------- */
 
-  socket.on("face_warning",  (code) => { socket.to(code).emit("face_warning"); });
-  socket.on("face_verified", (code) => { socket.to(code).emit("face_verified"); });
+  socket.on("face_warning",  (code) => { if (typeof code === "string") socket.to(code).emit("face_warning"); });
+  socket.on("face_verified", (code) => { if (typeof code === "string") socket.to(code).emit("face_verified"); });
 
   /* ---------- REMOTE TRANSFORM ---------- */
 
-  socket.on("transform", ({ code, target, posX, posY, scale }) => {
+  socket.on("transform", (payload) => {
+    if (!payload || typeof payload.code !== "string") return;
+    const { code, target, posX, posY, scale } = payload;
     socket.to(code).emit("transform", { target, posX, posY, scale });
   });
 
