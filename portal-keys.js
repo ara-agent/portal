@@ -35,8 +35,21 @@ const crypto = require("crypto");
 /* ------------------------------------------------------------------ */
 
 const RPC_URL       = process.env.SOLANA_RPC_URL || "https://api.mainnet-beta.solana.com";
-const PROGRAM_ID    = process.env.PROGRAM_ID      ? new PublicKey(process.env.PROGRAM_ID)      : null;
-const TREASURY      = process.env.TREASURY_PUBKEY ? new PublicKey(process.env.TREASURY_PUBKEY) : null;
+
+/* Parse a pubkey from env without crashing the whole server on a typo.
+   `new PublicKey("garbage")` throws at module load, taking down the process. */
+function parsePubkeyEnv(name, val) {
+  if (!val) return null;
+  try {
+    return new PublicKey(val);
+  } catch (e) {
+    console.error(`portal-keys: ${name} is not a valid public key (${e.message}) — treating as unset.`);
+    return null;
+  }
+}
+
+const PROGRAM_ID    = parsePubkeyEnv("PROGRAM_ID", process.env.PROGRAM_ID);
+const TREASURY      = parsePubkeyEnv("TREASURY_PUBKEY", process.env.TREASURY_PUBKEY);
 const KEY_PRICE_LAMPORTS = 100_000_000; // must match lib.rs constant
 
 if (!PROGRAM_ID || !TREASURY) {
