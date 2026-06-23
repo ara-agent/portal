@@ -187,7 +187,7 @@ if (process.env.ADMIN_KEYS) {
     .filter(k => k.length === 8)
     .forEach(k => {
       adminKeys.add(k);
-      console.log(`Permanent gifted key loaded: ${k}`);
+      console.log("Permanent gifted key loaded");
     });
 }
 
@@ -207,13 +207,13 @@ async function validateKey(code) {
 
   /* Startup load may have failed if face service wasn't ready yet — retry once */
   const faceUrl = FACE_URL();
-  console.log(`validateKey: "${code}" not in memory (${adminKeys.size} keys loaded), fetching from ${faceUrl}/admin-keys`);
+  console.log(`validateKey: code not in memory (${adminKeys.size} keys loaded), fetching from ${faceUrl}/admin-keys`);
   try {
     const r = await fetch(`${faceUrl}/admin-keys`, { headers: faceAuthHeaders() });
     if (r.ok) {
       const { keys } = await r.json();
       keys.forEach(k => adminKeys.add(k));
-      console.log(`validateKey: loaded ${keys.length} keys from face service: [${keys.join(", ")}]`);
+      console.log(`validateKey: loaded ${keys.length} keys from face service`);
       if (adminKeys.has(code)) return true;
     } else {
       console.warn(`validateKey: face service /admin-keys returned ${r.status}`);
@@ -277,7 +277,7 @@ function init(app) {
     const key = generateAdminKey();
     adminKeys.add(key);
     syncKeyToFaceService(key); // persist to face service disk — survives redeploys
-    console.log(`Admin key generated: ${key} (total admin keys: ${adminKeys.size})`);
+    console.log(`Admin key generated (total admin keys: ${adminKeys.size})`);
     res.json({ portalKey: key });
   });
 
@@ -381,7 +381,7 @@ async function listenForKey(buyer, sessionId) {
       if (key && key.length === 8) {
         const session = pendingSessions.get(sessionId);
         if (session) session.portalKey = key;
-        console.log(`Key issued: ${key} for session ${sessionId}`);
+        console.log(`Key issued for session ${sessionId}`);
         return;
       }
     } catch {}
