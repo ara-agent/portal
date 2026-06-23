@@ -873,7 +873,14 @@ async function join() {
   currentCode = code;
 
   document.getElementById("status").innerText = "starting camera...";
-  localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+  try {
+    localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+  } catch (err) {
+    console.error("getUserMedia failed", err);
+    document.getElementById("status").innerText =
+      "camera / microphone access is required \u2014 allow access and try again";
+    return;
+  }
   document.getElementById("local").srcObject = localStream;
 
   /* ---- face verification ---- */
