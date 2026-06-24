@@ -186,10 +186,24 @@ app.get("/ice-config", (req, res) => {
 
 const rooms = {};
 
+function normalizeRoomCode(code) {
+  if (typeof code !== "string") return null;
+  const trimmed = code.trim();
+  return trimmed || null;
+}
+
+function isObject(value) {
+  return value !== null && typeof value === "object";
+}
+
 io.on("connection", (socket) => {
 
   socket.on("join", async (code) => {
-    code = code.trim();
+    code = normalizeRoomCode(code);
+    if (!code) {
+      socket.emit("invalid_key");
+      return;
+    }
 
     if (!rooms[code]) rooms[code] = { users: [] };
     const room = rooms[code];
@@ -197,7 +211,12 @@ io.on("connection", (socket) => {
     /* Only the initiator (first to join) must hold a valid key.
        The guest (second) just needs to know the code. */
     if (room.users.length === 0 && portalKeys) {
-      const valid = await portalKeys.validateKey(code);
+      let valid = false;
+      try {
+        valid = await portalKeys.validateKey(code);
+      } catch (e) {
+        console.error("portal key validation failed:", e);
+      }
       if (!valid) {
         socket.emit("invalid_key");
         return;
@@ -225,18 +244,32 @@ io.on("connection", (socket) => {
 
   /* ---------- SIGNAL ---------- */
 
-  socket.on("signal", ({ code, data }) => {
+  socket.on("signal", (payload) => {
+    if (!isObject(payload)) return;
+    const code = normalizeRoomCode(payload.code);
+    if (!code) return;
+    const { data } = payload;
     socket.to(code).emit("signal", data);
   });
 
   /* ---------- FACE WARNING ---------- */
 
-  socket.on("face_warning",  (code) => { socket.to(code).emit("face_warning"); });
-  socket.on("face_verified", (code) => { socket.to(code).emit("face_verified"); });
+  socket.on("face_warning", (code) => {
+    code = normalizeRoomCode(code);
+    if (code) socket.to(code).emit("face_warning");
+  });
+  socket.on("face_verified", (code) => {
+    code = normalizeRoomCode(code);
+    if (code) socket.to(code).emit("face_verified");
+  });
 
   /* ---------- REMOTE TRANSFORM ---------- */
 
-  socket.on("transform", ({ code, target, posX, posY, scale }) => {
+  socket.on("transform", (payload) => {
+    if (!isObject(payload)) return;
+    const code = normalizeRoomCode(payload.code);
+    if (!code) return;
+    const { target, posX, posY, scale } = payload;
     socket.to(code).emit("transform", { target, posX, posY, scale });
   });
 
