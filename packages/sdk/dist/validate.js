@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.validatePortalKey = validatePortalKey;
 const web3_js_1 = require("@solana/web3.js");
+const anchor_1 = require("@coral-xyz/anchor");
 const portal_idl_1 = require("@maxtindall/portal-idl");
 const KEY_RECORD_DISCRIMINATOR = Buffer.from([71, 3, 224, 40, 16, 111, 28, 230]);
 const KEY_RECORD_DATA_SIZE = 93;
@@ -19,7 +20,7 @@ async function validatePortalKey(opts) {
     const programId = new web3_js_1.PublicKey(opts.programId ?? portal_idl_1.PROGRAM_ID);
     const accounts = await connection.getProgramAccounts(programId, {
         filters: [
-            { memcmp: { offset: 0, bytes: KEY_RECORD_DISCRIMINATOR.toString("base64") } },
+            { memcmp: { offset: 0, bytes: anchor_1.utils.bytes.bs58.encode(KEY_RECORD_DISCRIMINATOR) } },
             { dataSize: KEY_RECORD_DATA_SIZE },
         ],
     });

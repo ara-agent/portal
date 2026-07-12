@@ -9,6 +9,7 @@
   ],
   "scripts": {
     "build": "tsc",
+    "test": "node --test test/*.test.js",
     "prepublishOnly": "npm run build"
   },
   "keywords": ["solana", "anchor", "portal", "webrtc", "sdk"],
