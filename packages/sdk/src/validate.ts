@@ -1,4 +1,5 @@
 import { PublicKey } from "@solana/web3.js";
+import { utils } from "@coral-xyz/anchor";
 import { PROGRAM_ID as DEFAULT_PROGRAM_ID } from "@maxtindall/portal-idl";
 import type { ValidateOptions } from "./types";
 
@@ -20,7 +21,7 @@ export async function validatePortalKey(opts: ValidateOptions): Promise<boolean>
 
   const accounts = await connection.getProgramAccounts(programId, {
     filters: [
-      { memcmp: { offset: 0, bytes: KEY_RECORD_DISCRIMINATOR.toString("base64") } },
+      { memcmp: { offset: 0, bytes: utils.bytes.bs58.encode(KEY_RECORD_DISCRIMINATOR) } },
       { dataSize: KEY_RECORD_DATA_SIZE },
     ],
   });
